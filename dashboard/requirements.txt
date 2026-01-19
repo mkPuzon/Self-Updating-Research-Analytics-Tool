@@ -1,3 +1,1 @@
-streamlit==1.51.0
-sqlachemy==2.0.44
-plotly.express==0.4.1
+streamlit

@@ -1,16 +1,18 @@
 # AURA: AI Understanding, Research, and Analytics glossary for AI education
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
-AURA is a self-updating glossary built upon research paper processing pipeline that automates the analysis of academic papers from arXiv, enabling students to better understand cutting-edge AI research. The system fetches the latest papers from arXiv, processes their text, and prepares data for further analysis and display.
+AURA is a self-updating glossary built upon an end-to-end data pipeline that automates the analysis of academic papers, enabling better understand of trends in cutting-edge AI research. The system fetches the latest AI-related papers from arXiv, extracts and cleans data, formats data in machine readable formats, and prepares data for further analysis and display.
+
+This project features a Streamlit dashboard for developer metrics as well as an Nginx container for a full web frontend to display data.
 
 ## Features
 
 - **Automated Paper Collection**: Fetches latest AI research papers from arXiv.
 - **Text Extraction**: Extracts and cleans text from pdf in a structured manner for easy analysis with LLMs.
 - **Keyword and Definition Extraction**: Uses Gemma3 and Llama3.3 to identify key terms, ideas, and their definitions.
-- **Database Integration**: Uses PostgreSQL to store processed data for analysis and retrieval.
+- **Database Integration**: Uses SQLite to store data for analysis and retrieval.
 - **Modular Design**: Easy to extend with new processing modules and data sources.
 
 ## Components
@@ -64,20 +66,22 @@ This will:
 3. Extract text and analyze content
 4. Update the database with new findings
 
-## Database Schema
+## Current TODOs
+This project is currently being containerized and we are migrating from PostgreSQL to SQLite.
 
-The system uses PostgreSQL to store:
-- Paper metadata (title, authors, publication date, etc.)
-- Extracted text and processed content
-- Identified keywords and their definitions
-- Relationships between papers and terms
+- [X] Working project MVP w/ PostgreSQL
+- [X] Set up container project structure
+   - [X] Confirm docker compose runs base project
 
-## Current Statistics
-For scraping 200 most recent papers:
-- AVG 19s per paper metadata/pdf download | 3 second of enforced wait time
-- AVG 37m for 200 papers | 10 minutes of enforced wait time
-Using a local instance of Gemma3:12b for keyword and definition extraction:
-- AVG def extraction rate: 82.84% | Range = (73.17, 85.17)
+- [ ] processor
+   - [ ] Fix imports and streamline logic
+   - [ ] Switch db logic to SQLite
+- [ ] dashboard
+   - [ ] Connect to new db and display basic stats
+
+- [ ] Write Python-native automated scripts
+   - [ ] General logging
+   - [ ] Delete locally stored files
 
 ## License
 
@@ -86,4 +90,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Thank you to [arXiv](https://arxiv.org/) for use of its open access interoperability.
-- The open-source community for various libraries and tools.

@@ -1,0 +1,10 @@
+# Tested on Ubuntu 23.04 using Python 3.11.4
+
+requests        # request papers from arXiv
+feedparser      # parse atom feed from arXiv request
+# setuptools      
+
+pypdf           # process pdfs
+
+python-dotenv   # for environment variables
+schedule        # Python-native chron replacement

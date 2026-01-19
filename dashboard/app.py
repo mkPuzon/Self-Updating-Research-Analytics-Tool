@@ -4,13 +4,15 @@ A Streamlit front end for the AURA PostgreSQL db.
 
 Nov 2025
 '''
+import os
+import sqlite3
 import pandas as pd
 import streamlit as st
-import plotly.graph_objects as go
 
 def get_conn():
     try:
-        conn = st.connection("postgresql", type="sql")
+        db_path = os.getenv('DB_PATH', 'app/data/db.sqlite3')
+        conn = sqlite3.connect(db_path) 
         return conn
     except Exception as e:
         print(f"PG connection error: {e}")
@@ -125,44 +127,6 @@ df_tags = pd.DataFrame({
 
 bar_colors = colors[: len(df_tags)]
 
-fig = go.Figure(
-    go.Bar(
-        x=df_tags["count"],
-        y=df_tags["tag"],
-        orientation="h",
-        marker=dict(color=bar_colors),
-        hovertemplate="<b>%{y}</b><br>Count: %{x}<extra></extra>"
-    )
-)
-fig.update_layout(
-    showlegend=False,
-    margin=dict(l=140, r=20, t=40, b=40),  # tweak left margin for long labels if needed
-    height=400
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# -------- second graph -------- #
-df_tags = pd.DataFrame({
-    "tag": list(other_tags.keys()),
-    "count": list(other_tags.values())
-})
-fig = go.Figure(
-    go.Bar(
-        x=df_tags["count"],
-        y=df_tags["tag"],
-        orientation="h",
-        marker=dict(color=bar_colors),
-        hovertemplate="<b>%{y}</b><br>Count: %{x}<extra></extra>"
-    )
-)
-fig.update_layout(
-    showlegend=False,
-    margin=dict(l=140, r=20, t=40, b=40),  # tweak left margin for long labels if needed
-    height=400
-)
-
-st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     pass
