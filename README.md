@@ -1,7 +1,7 @@
 # AURA: AI Understanding, Research, and Analytics glossary for AI education
 
-[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![SQLite](https://img.shields.io/badge/SQLite3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 AURA is a self-updating glossary built upon an end-to-end data pipeline that automates the analysis of academic papers, enabling better understand of trends in cutting-edge AI research. The system fetches the latest AI-related papers from arXiv, extracts and cleans data, formats data in machine readable formats, and prepares data for further analysis and display.
 
