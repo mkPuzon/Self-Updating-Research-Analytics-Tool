@@ -1,7 +1,7 @@
 #######################################################
 # Sets up and runs the main scraper logic             #
 #######################################################
-FROM python:3.11
+FROM python:3.12
 
 # Creates a folder inside the container and cd into it
 WORKDIR /app
