@@ -14,7 +14,7 @@ def date_conv(date_str):
     year, month, day = date_str.split("-")
     return f"{year}{month}{day}0000"
 
-def get_arxiv_metadata_batch(query, max_results=2):
+def get_arxiv_metadata(query: str, max_results: int = 2):
     if " " in query:
         query = query.replace(" ", "+")
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     
     def test_arxiv_scraper():
         max_results = 3
-        records = get_arxiv_metadata_batch("cs.AI", max_results=max_results) 
+        records = get_arxiv_metadata("cs.AI", max_results=max_results) 
         
         assert type(records) == dict
         assert list(records.keys()) == list(range(max_results))

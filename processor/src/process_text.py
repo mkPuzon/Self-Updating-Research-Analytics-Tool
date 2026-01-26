@@ -19,17 +19,18 @@ import json
 import time
 import requests
 
-from google import genai # query Gemini
+from openai import OpenAI
 from dotenv import load_dotenv
 
-def query_ollama_model(paper_txt, model="gemma3:12b", verbose=False):
+def query_keywords(abstract_txt, model="gemma3:4b", verbose=False):
+
     ollama_url = os.getenv("OLLAMA_API")
-    sys_prompt = os.getenv("OLLAMA_PROMPT_KEYWORD_1")
+    sys_prompt = os.getenv("KEYWORD_PROMPT_1")
     headers = {"Content-Type": "application/json"}
     
     data = {
         "model": model,
-        "prompt": sys_prompt + paper_txt,
+        "prompt": sys_prompt + abstract_txt,
         "stream": True,
         "options": {
             "num_ctx": 65536
@@ -38,6 +39,7 @@ def query_ollama_model(paper_txt, model="gemma3:12b", verbose=False):
     model_response = ""
 
     t0 = time.time()
+    
     with requests.post(ollama_url, headers=headers, json=data, stream=True) as response:
         if response.status_code != 200:
             print(f"Error: {response.status_code}, {response.text}")
@@ -54,23 +56,33 @@ def query_ollama_model(paper_txt, model="gemma3:12b", verbose=False):
 
     t1 = time.time()
     if verbose:
-        print(f"    == Keywords extracted in {t1-t0:.2f} seconds")
+        print(f"---- Keywords extracted in {t1-t0:.2f} seconds")
     return model_response
 
-def get_definitions(keywords, paper_txt, model="gemma3:12b", verbose=False):
+def query_definitions(keywords, paper_txt, model="gemma3:1b", openai=False, verbose=False):
+
     if not keywords:
         return {}
     
-    if model == "gemma3:12b":
-        ollama_url = os.getenv("OLLAMA_API")
-    elif model == "phi3:14b":
-        ollama_url = os.getenv("OLLAMA_API")
-    elif model == "llama3.3":
-        ollama_url = os.getenv("OLLAMA_DAI_API")
-    else:
-        raise ValueError("Invalid model name: {model}. Valid options: gemma3:12b, llama3.3, phi3:14b")
+    sys_prompt = f"{os.getenv('DEFINTION_PROMPT_1')} {keywords}. Here is the paper itself: "
+
+    if openai:
+        print("[DEBUG] Querying OpenAI model...")
+        client = OpenAI(
+            api_key=os.environ.get("OPENAI_KEY"),
+        )
+        # gpt-4.1-nano, o4-mini
+        response = client.responses.create(
+            model="gpt-4.1-nano",
+            instructions="You are a Python dictionary generator. Do not return anything except for a valid Python dictionary.",
+            input=sys_prompt + paper_txt,
+        )
+        print(f"[DEBUG] Model response: {response.output_text}")
+        
+        return response.output_text
     
-    sys_prompt = f"{keywords}: {os.getenv('OLLAMA_PROMPT_DEFINITION_1')}"
+    
+    ollama_url = os.getenv("OLLAMA_API")
     headers = {"Content-Type": "application/json"}
     
     data = {
@@ -85,8 +97,9 @@ def get_definitions(keywords, paper_txt, model="gemma3:12b", verbose=False):
 
     t0 = time.time()
     with requests.post(ollama_url, headers=headers, json=data, stream=True) as response:
+
         if response.status_code != 200:
-            print(f"Error: {response.status_code}, {response.text}")
+            print(f"[ERROR] in query_definitions: {response.status_code}, {response.text}")
             return ""
 
         for line in response.iter_lines():
@@ -100,7 +113,8 @@ def get_definitions(keywords, paper_txt, model="gemma3:12b", verbose=False):
 
     t1 = time.time()
     if verbose:
-        print(f"    == Definitions extracted in {t1-t0:.2f} seconds")
+        print(f"---- Definitions extracted in {t1-t0:.2f} seconds")
+
     return model_response
 
 def check_keywords(keywords):
@@ -111,37 +125,43 @@ def check_keywords(keywords):
         keywords = re.findall(r'["\']([^"\']+)["\']', list_content)
         return keywords
     else:
-        # print(f"Cannot find valid Python list in response: {keywords}")
+        print(f"[ERROR] in check_keywords; cannot find valid Python list in response: {keywords}")
         return []
 
 def check_definitions(definitions):
+
     dict_pattern = r'\{(?:[^{}]|(?:\{[^{}]*\}))*\}'
     dict_match = re.search(dict_pattern, definitions, re.DOTALL)
     if dict_match:
+
         try:
             import ast
             definitions_dict = ast.literal_eval(dict_match.group())
             if isinstance(definitions_dict, dict):
                 return definitions_dict
             else:
-                # print(f"Invalid dictionary format: {definitions}")
-                pass
+                print(f"[ERROR] in check_definitions; Invalid dictionary format: {definitions}")
+
         except (ValueError, SyntaxError) as e:
-            # print(f"Failed to parse dictionary: {definitions}")
-            pass
+            print(f"[ERROR] in check_definitions; Failed to parse dictionary: {definitions}")
+
     else:
-        # print(f"No dictionary found in model response: {definitions}")
+        print(f"[ERROR] in check_definitions; No dictionary found in model response: {definitions}")
         return {}
 
 def clean_keywords(definitions):
+
     num_keywords_defined = len(definitions.keys())
+
     for word in definitions.keys():
         if definitions[word] == 'None':
             num_keywords_defined -= 1
+
     return num_keywords_defined
             
     
-def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model="llama3.3", verbose=False):
+def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model="llama3.3", openai=False, verbose=False):
+
     load_dotenv()
     try:
         updated_dict = {}
@@ -158,12 +178,12 @@ def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model
                 if verbose:
                     print(f"\n\n{i}: {metadata_dict[str(i)]['full_arxiv_url']}")
                     
-                keywords = query_ollama_model(paper_txt=metadata_dict[str(i)]['abstract'], model=kwd_model)
+                keywords = query_keywords(abstract_txt=metadata_dict[str(i)]['abstract'], model=kwd_model)
                 keywords = check_keywords(keywords)
                 
                 # if we have keywords and full paper text to search
                 if keywords and (metadata_dict[str(i)]['full_text'] is not None):
-                    definitions = get_definitions(keywords=keywords, paper_txt=metadata_dict[str(i)]['full_text'], model=def_model, verbose=verbose)
+                    definitions = query_definitions(keywords=keywords, paper_txt=metadata_dict[str(i)]['full_text'], model=def_model, openai=openai, verbose=verbose)
                     definitions = check_definitions(definitions)
                     
                     if definitions: 
@@ -173,7 +193,7 @@ def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model
                     metadata_dict[str(i)]["keywords"] = keywords
                     metadata_dict[str(i)]["definitions"] = definitions
                     if verbose:
-                        print(f"    == Keywords: {keywords}")
+                        print(f"---- Keywords: {keywords}")
                         if definitions:
                             for key, value in definitions.items():
                                 print(f"    * {key}: {value}")
@@ -181,7 +201,7 @@ def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model
                     metadata_dict[str(i)]["keywords"] = []
                     metadata_dict[str(i)]["definitions"] = {}
                     if verbose:
-                        print("    == No keywords found.")
+                        print("---- No keywords found.")
                         
                 updated_dict[str(i)] = metadata_dict[str(i)]
                         
@@ -189,21 +209,10 @@ def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model
                 json.dump(updated_dict, f, indent=2)
                 
     except FileNotFoundError:
-        print(f"[ERROR] File not found. Double check folder exists at: {batch_filepath}")
+        print(f"[ERROR] in generate_keywords_and_defs; File not found. Double check folder exists at: {batch_filepath}")
         return
     
     return num_papers, num_kwds_generated, num_dict_generated
-
-def get_keywords(abstract, keywords=5):
-    '''Using a Google LLM to extract keywords from a paper abstract.'''
-    model = "gemini-2.5-flash-lite"
-    prompt = f"For the following paper abstract, extract {keywords} keywords to describe the topic and content of the paper. Return they keywords in a Python list. Return only the Python list, no extra words. For example: ['computer science', 'RAG', 'higher education', ...]. Here is the abstrac to analyze: {abstract}"
-    
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-    response = client.models.generate_content(
-        model=model, contents=prompt
-    )
-    return response.text
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
