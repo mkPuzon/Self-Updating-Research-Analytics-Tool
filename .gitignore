@@ -1,6 +1,12 @@
+.env
 
-.streamlit/
-metadata
+# So Git tracks the data directory, but not the data itself
+data/*
+!data/.keep
+
+.streamlit/*
+__pycache__
+*.pyc
 
 ######## Standard Python .gitignore ########
 

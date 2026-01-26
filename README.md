@@ -74,14 +74,22 @@ This project is currently being containerized and we are migrating from PostgreS
    - [X] Confirm docker compose runs base project
 
 - [ ] processor
-   - [ ] Fix imports and streamline logic
+   - [X] Fix imports and streamline logic
+   - [ ] Set up option to query OpenAI models
    - [ ] Switch db logic to SQLite
+
 - [ ] dashboard
    - [ ] Connect to new db and display basic stats
 
+- [ ] front end
+   - [ ] Get front end up and running in Docker container
+   - [ ] Connect to SQLite db
+
 - [ ] Write Python-native automated scripts
-   - [ ] General logging
-   - [ ] Delete locally stored files
+   - [ ] General logging for volume and quality of extracted text
+   - [X] Delete locally stored files
+
+- [ ] Create reports for model timing/cost statistics 
 
 ## License
 
