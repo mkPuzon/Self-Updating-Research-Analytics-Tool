@@ -75,7 +75,7 @@ This project is currently being containerized and we are migrating from PostgreS
 
 - [ ] processor
    - [X] Fix imports and streamline logic
-   - [ ] Set up option to query OpenAI models
+   - [X] Set up option to query OpenAI models
    - [ ] Switch db logic to SQLite
 
 - [ ] dashboard
