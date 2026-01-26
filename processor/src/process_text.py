@@ -42,7 +42,7 @@ def query_keywords(abstract_txt, model="gemma3:4b", verbose=False):
     
     with requests.post(ollama_url, headers=headers, json=data, stream=True) as response:
         if response.status_code != 200:
-            print(f"Error: {response.status_code}, {response.text}")
+            print(f"[Error]: {response.status_code}, {response.text}")
             return ""
 
         for line in response.iter_lines():
@@ -192,14 +192,16 @@ def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model
                     
                     metadata_dict[str(i)]["keywords"] = keywords
                     metadata_dict[str(i)]["definitions"] = definitions
-                    if verbose:
-                        print(f"---- Keywords: {keywords}")
-                        if definitions:
-                            for key, value in definitions.items():
-                                print(f"    * {key}: {value}")
+
+                    # if verbose:
+                    #     print(f"---- Keywords: {keywords}")
+                    #     if definitions:
+                    #         for key, value in definitions.items():
+                    #             print(f"    * {key}: {value}")
                 else:
                     metadata_dict[str(i)]["keywords"] = []
                     metadata_dict[str(i)]["definitions"] = {}
+
                     if verbose:
                         print("---- No keywords found.")
                         

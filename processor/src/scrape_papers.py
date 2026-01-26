@@ -36,7 +36,7 @@ def download_pdf(pdf_url, save_dir, output_filename=None):
         return True
     
     except Exception as e:
-        print(f"Error downloading {pdf_url}: {e}")
+        print(f"[Error] downloading {pdf_url}: {e}")
         return False
 
 def clean_text(text: str):
@@ -113,7 +113,7 @@ def extract_text_pypdf(pdf_filepath: str):
         return text
     
     except Exception as e:
-        print(f"Error extracting text for {pdf_filepath}: {e}")
+        print(f"[Error] extracting text for {pdf_filepath}: {e}")
         
 def extract_text_docling(pdf_filepath: str):
     
@@ -122,7 +122,7 @@ def extract_text_docling(pdf_filepath: str):
         return doc.export_to_markdown()
     
     except Exception as e:
-        print(f"Error extracting text for {pdf_filepath}: {e}")
+        print(f"[Error] extracting text for {pdf_filepath}: {e}")
 
 def extract_text(metadata_dict: dict, pdf_save_dir: str, method: str = 'pypdf') -> None:
     '''Populates the passed metadata_dict with full paper texts.'''
@@ -142,7 +142,7 @@ def extract_text(metadata_dict: dict, pdf_save_dir: str, method: str = 'pypdf') 
                 elif method == 'docling':
                     text = extract_text_docling(pdf_filepath=pdf_filepath)
                 else:
-                    raise ValueError(f"Unknown text extraction method '{method}'. Valid options: 'pypdf', 'docling'")
+                    raise ValueError(f"[ERROR] Unknown text extraction method '{method}'. Valid options: 'pypdf', 'docling'")
                 
                 
                 metadata_dict[paper_id]['full_text'] = text
@@ -180,10 +180,10 @@ def scrape_papers(query, date, max_results=2, method='pypdf', verbose=False):
                 try:
                     download_pdf(pdf_url, pdf_save_dir)
                 except Exception as e:
-                    print(f"ERROR: Issue downloading PDF {pdf_url}: {e}")
+                    print(f"[ERROR] Issue downloading PDF {pdf_url}: {e}")
                     num_pdfs -= 1
         else:
-            if verbose: print(f"Skipping downloading paper {arxiv_id}, pdf already downloaded.")
+            if verbose: print(f"[WARNING] Skipping downloading paper {arxiv_id}, pdf already downloaded.")
 
     # extract text from each downloaded PDF
     extract_text(metadata_dict=metadata_dict, pdf_save_dir=pdf_save_dir, method=method)
@@ -191,9 +191,10 @@ def scrape_papers(query, date, max_results=2, method='pypdf', verbose=False):
     # save results from Python dict to JSON
     os.makedirs("./data/metadata", exist_ok=True)
     with open(f"./data/metadata/metadata_{date_clean}.json", "w") as f:
+
         json.dump(metadata_dict, f, indent=2)
-        print(f"Data saved to ./data/metadata/metadata_{date_clean}.json")
-        
+        print(f"[DEBUG] Data saved to ./data/metadata/metadata_{date_clean}.json")
+
     return num_papers_metadata, num_pdfs
     
     
