@@ -217,13 +217,12 @@ def generate_keywords_and_defs(batch_filepath, kwd_model="gemma3:12b", def_model
     return num_papers, num_kwds_generated, num_dict_generated
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python process_text.py <date>")
-        sys.exit(1)
+    from datetime import datetime
+    today = datetime.today().strftime("%Y-%M-%d")
         
     load_dotenv()
 
-    file_path = f"metadata/metadata_{sys.argv[1]}.json"
+    file_path = f"metadata/metadata_{today}.json"
     num_papers, num_kwds, num_dicts = generate_keywords_and_defs(file_path, kwd_model="gemma3:12b", def_model="gemma3:12b", verbose=False)
     # num_papers, num_kwds, num_dicts = generate_keywords_and_defs(file_path, kwd_model="gemma3:12b", def_model="phi3:14b", verbose=False)
     print(f"[{sys.argv[1]}] {(num_kwds/(num_papers*3))*100:.2f}% keyword extraction rate | Out of {num_papers} total papers: num papers w/ definitions={num_dicts}, num keywords extracted={num_kwds}")

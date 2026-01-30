@@ -44,7 +44,7 @@ def clean_text(text: str):
     if not text:
         return ""
 
-    # --- 1. Remove control characters (except newline and tab) ---
+    # Remove control characters (except newline and tab) ---
     cleaned_chars = []
     for ch in text:
         code = ord(ch)
@@ -52,7 +52,7 @@ def clean_text(text: str):
             cleaned_chars.append(ch)
     text = "".join(cleaned_chars)
 
-    # --- 2. Normalize common Unicode punctuation ---
+    # Normalize common Unicode punctuation ---
     replacements = {
         "\u2018": "'",  # left single quote
         "\u2019": "'",  # right single quote
@@ -68,7 +68,7 @@ def clean_text(text: str):
     for src, tgt in replacements.items():
         text = text.replace(src, tgt)
 
-    # --- 3. Fix hyphenation at line breaks (e.g., "exam-\nple") ---
+    # Fix hyphens at line breaks
     lines = text.splitlines()
     fixed_lines = []
     i = 0
