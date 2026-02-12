@@ -1,75 +1,207 @@
 '''processor/main.py
 
-Timing statistics (scraping and processing):
-- time | # papers  |   keyword model    | definition model
-- 2m7s | 10 papers | gemma3:12b (local) | gpt-4.1-nano 
+Main controller for AURA data processing pipeline.
+Orchestrates scraping, LLM processing, and database storage with comprehensive metrics tracking.
 
-Jan 2026
+Last Updated: Feb 2026
 '''
 import os
 import sys
 import shutil
-import time
-import logging
-import schedule
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from src.scrape_papers import scrape_papers
 from src.process_text import generate_keywords_and_defs
-from src.db_functions import dump_metadata_to_db, setup_db
+from src.db_functions import dump_metadata_to_db
+from src.metrics import PipelineMetrics, ErrorCategory
+from src.logger_config import setup_logging, get_logger
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Initialize logging
+setup_logging(log_level="INFO")
+logger = get_logger(__name__)
+
+
+def save_metrics_history(metrics: PipelineMetrics) -> None:
+    """
+    Save metrics to historical log file (JSONL format).
+
+    Args:
+        metrics: PipelineMetrics object with run data
+    """
+    try:
+        today = datetime.today().strftime("%Y-%M-%d")
+        log_dir = Path("data/logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        history_file = log_dir / f"metrics_history_{today}.jsonl"
+
+        # Append metrics as single JSON line
+        with open(history_file, "a") as f:
+            f.write(metrics.to_json() + "\n")
+
+        logger.info(f"Saved metrics to history", extra={"file": str(history_file)})
+
+    except Exception as e:
+        logger.error(f"Failed to save metrics history: {type(e).__name__}: {str(e)}")
+
 
 def job():
-    '''Main workflow for data scraping, processing, and uploading.'''
+    """
+    Main workflow for data scraping, processing, and uploading. Runs the complete pipeline with metrics tracking.
+    """
+    today = datetime.today().strftime('%Y-%m-%d')
+
+    # init metrics
+    metrics = PipelineMetrics(run_date=today)
+    logger.info("=" * 80)
+    logger.info(f"AURA Pipeline Starting - {today}")
+    logger.info("=" * 80)
+
     try:
+        logger.info("Starting Stage 1: Paper Scraping")
+        metrics.start_stage("scraping")
 
-        today = datetime.today().strftime('%Y-%m-%d')
+        try:
+            num_metadata, num_pdfs = scrape_papers(
+                query="cs.AI",
+                date=today,
+                max_results=10,
+                method='pypdf',
+                metrics=metrics
+            )
+            logger.info(f"Scraping complete: {num_metadata} metadata, {num_pdfs} PDFs")
 
-        # scrape papers & extract text           
-        num_metadata, num_pdfs = scrape_papers(query="cs.AI", date=today, max_results=10, method='pypdf', verbose=True)
-        print(f"[{today}] {(num_pdfs/num_metadata)*100:.2f}% of initial papers usable | {num_pdfs} full papers scraped | Metadata entries={num_metadata}, PDFs scraped={num_pdfs}")
+        except Exception as e:
+            logger.error(f"Scraping stage failed: {type(e).__name__}: {str(e)}", exc_info=True)
+            metrics.record_error(
+                ErrorCategory.PIPELINE_ERROR,
+                f"Scraping stage failed: {str(e)}",
+                {"stage": "scraping"}
+            )
+            raise
+        finally:
+            metrics.end_stage("scraping")
 
-        # pull keywords & definitions
-        file_path = f"./data/metadata/metadata_{today}.json"
-        num_papers, num_kwds, num_dicts = generate_keywords_and_defs(file_path, kwd_model="gemma3:12b", def_model="OPENAI", openai=True, verbose=True)
-        print(f"[{today}] {(num_kwds/(num_papers*3))*100:.2f}% keyword extraction rate | Out of {num_papers} total papers: num papers w/ definitions={num_dicts}, num keywords extracted={num_kwds}")
+        logger.info("Starting Stage 2: LLM Processing")
+        metrics.start_stage("llm_processing")
 
-        # add data to db
-        DATA_DIR = f'data/metadata/metadata_{today}.json'
-        DB_NAME = 'data/tests.db'
-        setup_db(DATA_DIR)
-        dump_metadata_to_db(DATA_DIR, DB_NAME, verbose=True)
+        try:
+            file_path = f"./data/metadata/metadata_{today}.json"
+
+            num_papers, num_kwds, num_dicts = generate_keywords_and_defs(
+                batch_filepath=file_path,
+                kwd_model="gemma3:12b",
+                def_model="gpt-4.1-nano",
+                openai=True,
+                metrics=metrics
+            )
+
+            logger.info(f"LLM processing complete: {num_papers} papers, {num_kwds} keywords, {num_dicts} with definitions")
+
+        except Exception as e:
+            logger.error(f"LLM processing stage failed: {type(e).__name__}: {str(e)}", exc_info=True)
+            metrics.record_error(
+                ErrorCategory.PIPELINE_ERROR,
+                f"LLM processing stage failed: {str(e)}",
+                {"stage": "llm_processing"}
+            )
+            raise
+        finally:
+            metrics.end_stage("llm_processing")
+
+        logger.info("Starting Stage 3: Database Import")
+        metrics.start_stage("database")
+
+        try:
+            data_file = f'data/metadata/metadata_{today}.json'
+            db_path = 'data/aura.db'
+
+            papers_inserted, papers_duplicate, papers_no_defs = dump_metadata_to_db(
+                json_filepath=data_file,
+                db_path=db_path,
+                metrics=metrics
+            )
+
+            logger.info(f"Database import complete: {papers_inserted} inserted, {papers_duplicate} duplicates, {papers_no_defs} no definitions")
+
+        except Exception as e:
+            logger.error(f"Database stage failed: {type(e).__name__}: {str(e)}", exc_info=True)
+            metrics.record_error(
+                ErrorCategory.PIPELINE_ERROR,
+                f"Database stage failed: {str(e)}",
+                {"stage": "database"}
+            )
+            raise
+        finally:
+            metrics.end_stage("database")
+
+        logger.info("All stages complete")
+
+        # generate and log summary
+        summary = metrics.get_summary()
+        print("\n" + summary + "\n")
+        save_metrics_history(metrics)
+
+        logger.info("=" * 80)
+        logger.info(f"AURA Pipeline Complete - {today}")
+        logger.info("=" * 80)
 
     except Exception as e:
-        logger.error(f"job() failed: {e}")
+        logger.critical(f"Pipeline failed catastrophically: {type(e).__name__}: {str(e)}", exc_info=True)
+
+        # still generate summary to show what was accomplished before failure
+        summary = metrics.get_summary()
+        print("\n" + summary + "\n")
+
+        # save metrics even on failure for debugging
+        save_metrics_history(metrics)
+
+        logger.info("=" * 80)
+        logger.info(f"AURA Pipeline Failed - {today}")
+        logger.info("=" * 80)
+
+        raise
+
 
 def clean_papers():
-    ''' Deletes locally stored papers after 7 days; only stored for immediate quality checks and troubleshooting.'''
+    """
+    Delete locally stored papers after 7 days. Papers are only stored for immediate quality checks and troubleshooting.
+    """
     try:
         expired = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')
-        if os.path.exists(f"./data/pdfs/papers_{expired}"):
-            shutil.rmtree(f"./data/pdfs/papers_{expired}")
-            
+        papers_dir = f"./data/pdfs/papers_{expired}"
+
+        if os.path.exists(papers_dir):
+            shutil.rmtree(papers_dir)
+            logger.info(f"Cleaned up expired papers", extra={"date": expired, "dir": papers_dir})
+        else:
+            logger.debug(f"No papers to clean for date {expired}")
+
     except Exception as e:
-        logger.error(f"clean_papers() failed: {e}")
-    
-# TEST: run immediaty on startup to verify its working
-job()
-clean_papers()
+        logger.error(f"clean_papers() failed: {type(e).__name__}: {str(e)}")
 
-# schedule job pipeline each day at 2am
-# schedule.every().day.at("02:00").do(job)
-# schedule.every().day.at("01:45").do(clean_papers)
 
-# logger.info("Scheduler started. Waiting for 2:00 AM...")
+if __name__ == "__main__":
+    # run immediately on startup for testing
+    logger.info("Starting AURA processor (test mode)")
 
-# while True:
-#     # check if a scheduled task is pending
-#     schedule.run_pending()
-#     # sleep to save CPU cycles
-#     time.sleep(60)
+    try:
+        job()
+        clean_papers()
+    except KeyboardInterrupt:
+        logger.info("Pipeline interrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.critical(f"Fatal error: {str(e)}")
+        sys.exit(1)
+
+    # Production scheduling (commented out for testing)
+    # schedule.every().day.at("02:00").do(job)
+    # schedule.every().day.at("01:45").do(clean_papers)
+    #
+    # logger.info("Scheduler started. Waiting for 2:00 AM...")
+    #
+    # while True:
+    #     schedule.run_pending()
+    #     time.sleep(60)

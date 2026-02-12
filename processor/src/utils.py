@@ -130,14 +130,6 @@ def check_directory_exists(directory):
     """Check if the specified directory exists."""
     return Path(directory).is_dir()
 
-
-def clean_text(text):
-    """Remove null bytes and other problematic characters from text."""
-    if not isinstance(text, str):
-        raise ValueError(f"Passed text is not a string: {text}")
-    # Remove null bytes and other control characters except newlines and tabs
-    return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', text)
-    
 def track_keyword_rate(logfile):
     percentages = []
     with open(logfile, 'r') as f:
