@@ -1,132 +1,155 @@
 '''app.py
 
-A Streamlit front end for the AURA PostgreSQL db.
+Streamlit backend analytics dashboard for the AURA SQLite database.
 
-Nov 2025
+Feb 2026
 '''
 import os
+import json
 import sqlite3
+from datetime import datetime, timedelta
+
 import pandas as pd
 import streamlit as st
 
+st.set_page_config(page_title="AURA Analytics", layout="wide")
+
+DB_PATH = os.getenv('DB_PATH', '/app/data/aura.db')
+
+@st.cache_resource
 def get_conn():
-    try:
-        db_path = os.getenv('DB_PATH', 'app/data/db.sqlite3')
-        conn = sqlite3.connect(db_path) 
-        return conn
-    except Exception as e:
-        print(f"PG connection error: {e}")
-        return None
-    
-all_cs_cats = {
-    "cs.AI": "Artificial Intelligence",
-    "cs.AR": "Hardware Architecture",
-    "cs.CC": "Computational Complexity",
-    "cs.CE": "Computational Engineering, Finance, and Science",
-    "cs.CG": "Computational Geometry",
-    "cs.CL": "Computation and Language",
-    "cs.CR": "Cryptography and Security",
-    "cs.CV": "Computer Vision and Pattern Recognition",
-    "cs.CY": "Computers and Society",
-    "cs.DB": "Databases",
-    "cs.DC": "Distributed, Parallel, and Cluster Computing",
-    "cs.DL": "Digital Libraries",
-    "cs.DM": "Discrete Mathematics",
-    "cs.DS": "Data Structures and Algorithms",
-    "cs.ET": "Emerging Technologies",
-    "cs.FL": "Formal Languages and Automata Theory",
-    "cs.GL": "General Literature",
-    "cs.GR": "Graphics",
-    "cs.GT": "Computer Science and Game Theory",
-    "cs.HC": "Human-Computer Interaction",
-    "cs.IR": "Information Retrieval",
-    "cs.IT": "Information Theory",
-    "cs.LG": "Machine Learning",
-    "cs.LO": "Logic in Computer Science",
-    "cs.MA": "Multiagent Systems",
-    "cs.MM": "Multimedia",
-    "cs.MS": "Mathematical Software",
-    "cs.NA": "Numerical Analysis",
-    "cs.NE": "Neural and Evolutionary Computing",
-    "cs.NI": "Networking and Internet Architecture",
-    "cs.OH": "Other Computer Science",
-    "cs.OS": "Operating Systems",
-    "cs.PF": "Performance",
-    "cs.PL": "Programming Languages",
-    "cs.RO": "Robotics",
-    "cs.SC": "Symbolic Computation",
-    "cs.SD": "Sound",
-    "cs.SE": "Software Engineering",
-    "cs.SI": "Social and Information Networks",
-    "cs.SY": "Systems and Control"
-}
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+@st.cache_data(ttl=300)
+def load_articles():
+    conn = get_conn()
+    return pd.read_sql("SELECT * FROM articles", conn)
+
+@st.cache_data(ttl=300)
+def load_keyword_count():
+    conn = get_conn()
+    row = pd.read_sql("SELECT COUNT(*) as cnt FROM keywords", conn)
+    return int(row["cnt"].iloc[0])
+
 
 arxiv_cats = {
-    "cs.AI": "Artificial Intelligence",
-    "cs.CE": "Computational Engineering, Finance, and Science",
+    # "cs.AI": "Artificial Intelligence",
+    "cs.CE": "Computational Engineering",
     "cs.CL": "Computation and Language",
-    "cs.CV": "Computer Vision and Pattern Recognition",
+    "cs.CV": "Computer Vision",
     "cs.CY": "Computers and Society",
     "cs.DB": "Databases",
-    "cs.DC": "Distributed, Parallel, and Cluster Computing",
+    "cs.DC": "Distributed Computing",
     "cs.ET": "Emerging Technologies",
     "cs.HC": "Human-Computer Interaction",
-    "cs.LG": "Machine Learning",
+    "cs.IR": "Information Retrieval",
+    # "cs.LG": "Machine Learning",
     "cs.MA": "Multiagent Systems",
     "cs.NE": "Neural and Evolutionary Computing",
     "cs.PF": "Performance",
     "cs.RO": "Robotics",
+    "cs.SE": "Software Engineering",
 }
 
-colors = [
-    '#ff9400', '#ff8b00', '#ff8300',
-    '#ff6900', '#ff6100', '#ff5800',
-    '#ff3f00', '#ff3600', '#ff2e00',
-    '#ff1400', '#ff0c00', '#ff0300',
-    '#ea0014', '#e2001c', '#da0024',
-    '#c2003b', '#ba0042', '#b2004a',
-    '#9a0061', '#920068', '#8a0070',
-    '#820077', '#7a007f', '#720087', '#6a008e', '#800080'
-]
+# load data from sqlite db
+df = load_articles()
+total_keywords = load_keyword_count()
 
+st.title("AURA Database Analytics")
 
-conn = get_conn()
-df = conn.query('SELECT * FROM articles;', ttl="0")
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Papers", f"{len(df):,}")
+col2.metric("Total Keywords", f"{total_keywords:,}")
+col3.metric("Columns per Paper", len(df.columns))
 
-st.title(body="AURA Database Analytics")
+st.divider()
 
-with st.sidebar:
-    st.title("Options")
-    # TODO add filtering by dates
-    st.checkbox(label="Toggle Graph", value=False)
+# daily metrics graph
+st.subheader("Daily Scraping Activity")
 
-st.subheader(body="STATISTICS", divider="orange")
-st.text(body=f"PostgreSQL database currently contains {df.shape[0]} total papers, each with the following features:")
-st.text(body=f"{[col for col in df.columns]}")
+# parse date_scraped to date-only for grouping
+df["scrape_date"] = pd.to_datetime(df["date_scraped"], errors="coerce").dt.date
 
+# count keywords per article from the articles.keywords json column
+def count_kw(val):
+    if not val:
+        return 0
+    try:
+        return len(json.loads(val))
+    except (json.JSONDecodeError, TypeError):
+        return 0
+
+df["kw_count"] = df["keywords"].apply(count_kw)
+
+# group by day
+daily = (
+    df.dropna(subset=["scrape_date"])
+    .groupby("scrape_date")
+    .agg(papers=("article_id", "count"), keywords=("kw_count", "sum"))
+    .reset_index()
+)
+daily["scrape_date"] = pd.to_datetime(daily["scrape_date"])
+daily = daily.sort_values("scrape_date")
+
+# timeframe selector
+window = st.radio(
+    "Time window",
+    ["1 month", "3 months", "6 months"],
+    index=1,
+    horizontal=True,
+)
+months = {"1 month": 1, "3 months": 3, "6 months": 6}[window]
+cutoff = datetime.now() - timedelta(days=months * 30)
+daily_filtered = daily[daily["scrape_date"] >= cutoff].copy()
+
+if daily_filtered.empty:
+    st.info("No scraping data in the selected window.")
+else:
+    daily_filtered = daily_filtered.set_index("scrape_date")
+
+    chart_col1, chart_col2 = st.columns(2)
+
+    with chart_col1:
+        st.caption("Papers scraped per day")
+        st.bar_chart(daily_filtered["papers"], color="#ff6900")
+
+    with chart_col2:
+        st.caption("Keywords extracted per day")
+        st.bar_chart(daily_filtered["keywords"], color="#6a008e")
+
+st.divider()
+
+st.subheader("arXiv Category Distribution")
+# parse json tag arrays
 all_tags = {}
-for row in df.itertuples():
-    for tag in row.tags:
-        if all_tags.get(tag):
-            all_tags[tag] += 1
-        else:
-            all_tags[tag] = 1
-            
+for raw in df["tags"].dropna():
+    try:
+        tags = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        continue
+    for tag in tags:
+        all_tags[tag] = all_tags.get(tag, 0) + 1
+
+# split into known arXiv CS categories and other
 labeled_tags = {}
-other_tags = {}
-for tag in all_tags:
-    if arxiv_cats.get(tag):
-        labeled_tags[arxiv_cats[tag]] = all_tags[tag]
-    else:
-        other_tags[tag] = other_tags.get(tag, 0) + 1
+for tag, count in all_tags.items():
+    label = arxiv_cats.get(tag)
+    if label:
+        labeled_tags[label] = labeled_tags.get(label, 0) + count
 
-df_tags = pd.DataFrame({
-    "tag": list(labeled_tags.keys()),
-    "count": list(labeled_tags.values())
-})
+df_tags = (
+    pd.DataFrame({"category": list(labeled_tags.keys()), "count": list(labeled_tags.values())})
+    .sort_values("count", ascending=True)
+)
 
-bar_colors = colors[: len(df_tags)]
+if not df_tags.empty:
+    st.bar_chart(df_tags.set_index("category"), color="#ff6900", horizontal=True)
+else:
+    st.info("No tag data available.")
 
+st.divider()
 
-if __name__ == "__main__":
-    pass
+# raw data preview
+with st.expander("Raw articles table (first 50 rows)"):
+    preview_cols = ["article_id", "title", "date_submitted", "date_scraped", "tags", "keywords"]
+    st.dataframe(df[preview_cols].head(50))

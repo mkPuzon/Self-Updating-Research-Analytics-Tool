@@ -8,8 +8,20 @@ services:
       context: ./processor
       dockerfile: Dockerfile
     volumes:
-      - sqlite_data:/app/data
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: python main.py
+
+  # Connects SQLite to frontend
+  api:
+    build: ./api
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/aura.db
+    expose:
+      - "8000"
 
   # Streamlit Dashboard; reads from DB
   dashboard:
@@ -17,11 +29,11 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
     volumes:
-      - sqlite_data:/app/data
+      - ./data:/app/data
     ports:
       - "8501:8501"
     environment:
-      - DB_PATH=/app/data/db.sqlite3
+      - DB_PATH=/app/data/aura.db
     depends_on:
       - processor
 
@@ -32,12 +44,9 @@ services:
       - "80:80"
     volumes:
       # map config
-      - ./nginx.conf:/etc/nginx/nginx/conf:ro
-      # map placeholder html
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # map html
       - ./nginx/html:/usr/share/nginx/html:ro
     depends_on:
-      - dashboard
+      - api
 
-# Shared volume
-volumes:
-  sqlite_data:

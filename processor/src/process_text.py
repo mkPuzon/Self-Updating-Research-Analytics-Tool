@@ -108,7 +108,7 @@ def query_definitions(keywords: List[str], paper_txt: str, model: str = "gemma3:
     Args:
         keywords: List of keywords to define
         paper_txt: Full paper text
-        model: Model to use (Ollama model name or "gpt-4.1-nano" for OpenAI)
+        model: Model to use (Ollama model name or "gpt-5-mini" for OpenAI)
         openai: Whether to use OpenAI API
 
     Returns:
@@ -121,13 +121,13 @@ def query_definitions(keywords: List[str], paper_txt: str, model: str = "gemma3:
 
     # OpenAI path
     if openai:
-        logger.debug("Querying OpenAI for definitions", extra={"model": "gpt-4.1-nano", "num_keywords": len(keywords)})
+        logger.debug("Querying OpenAI for definitions", extra={"model": "gpt-5-mini", "num_keywords": len(keywords)})
         t0 = time.time()
 
         try:
             client = OpenAI(api_key=os.environ.get("OPENAI_KEY"))
             response = client.responses.create(
-                model="gpt-4.1-nano",
+                model="gpt-5-mini",
                 instructions="You are a Python dictionary generator. Do not return anything except for a valid Python dictionary.",
                 input=sys_prompt + paper_txt,
             )

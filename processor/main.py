@@ -66,7 +66,7 @@ def job():
             num_metadata, num_pdfs = scrape_papers(
                 query="cs.AI",
                 date=today,
-                max_results=10,
+                max_results=200,
                 method='pypdf',
                 metrics=metrics
             )
@@ -183,6 +183,9 @@ def clean_papers():
 
 
 if __name__ == "__main__":
+    import schedule
+    import time
+
     # run immediately on startup for testing
     logger.info("Starting AURA processor (test mode)")
 
@@ -196,12 +199,12 @@ if __name__ == "__main__":
         logger.critical(f"Fatal error: {str(e)}")
         sys.exit(1)
 
-    # Production scheduling (commented out for testing)
-    # schedule.every().day.at("02:00").do(job)
-    # schedule.every().day.at("01:45").do(clean_papers)
-    #
-    # logger.info("Scheduler started. Waiting for 2:00 AM...")
-    #
-    # while True:
-    #     schedule.run_pending()
-    #     time.sleep(60)
+    # production scheduling (comment out for testing)
+    schedule.every().day.at("02:00").do(job)
+    schedule.every().day.at("01:45").do(clean_papers)
+    
+    logger.info("Scheduler started. Waiting for 2:00 AM...")
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(60)

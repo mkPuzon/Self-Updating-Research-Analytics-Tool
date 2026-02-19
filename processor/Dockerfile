@@ -10,6 +10,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# install local model for keyword extraction
+# RUN ollama pull gemma3:4b
+
 # Copy main controller
 COPY main.py .
 

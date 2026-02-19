@@ -2,12 +2,12 @@
 
 requests        # request papers from arXiv
 feedparser      # parse atom feed from arXiv request
-# setuptools      
 
 pypdf           # base pdf processing
-docling         # improved pdf processing 
+# docling         # improved pdf processing 
 
 python-dotenv   # for environment variables
 schedule        # Python-native chron replacement
 
 openai          # for querying OpenAI models via API
+ollama          # for querying local models
