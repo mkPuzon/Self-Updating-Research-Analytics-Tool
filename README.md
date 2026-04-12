@@ -72,7 +72,28 @@ AURA is a self-updating glossary built upon an end-to-end data pipeline that aut
    cd Self-Updating-Research-Analytics-Tool
    ```
 
-2. Create a `.env` file in the project root with the following variables:
+2. Configure Ollama to listen on all interfaces so the processor container can reach it.
+   By default Ollama binds to `127.0.0.1` only, which blocks Docker bridge traffic.
+
+   **systemd (Linux):**
+   ```bash
+   sudo systemctl edit ollama
+   # Add under [Service]:
+   #   Environment="OLLAMA_HOST=0.0.0.0"
+   sudo systemctl restart ollama
+   ```
+
+   **Manual / WSL2:**
+   ```bash
+   OLLAMA_HOST=0.0.0.0 ollama serve
+   ```
+
+   Pull the required models:
+   ```bash
+   ollama pull gemma3:4b
+   ```
+
+3. Create a `.env` file in the project root with the following variables:
    ```env
    OLLAMA_API=http://host.docker.internal:11434/api/generate
    OPENAI_KEY=your-key-here
@@ -120,17 +141,121 @@ data/
 └── logs/                           # Pipeline logs
 ```
 
+## Database Schema
+
+`aura.db` contains two primary tables. Array-type columns (`tags`, `authors`, `keywords`, `paper_references`) are stored as JSON strings and parsed at query time.
+
+### `articles`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `article_id` | INTEGER PK | Auto-assigned row ID |
+| `uuid` | TEXT | arXiv paper ID |
+| `title` | TEXT | Paper title |
+| `date_submitted` | TEXT | Original arXiv submission date (`YYYY-MM-DD`) |
+| `date_scraped` | TEXT | Date the pipeline processed this paper |
+| `tags` | TEXT | JSON array of arXiv category tags (e.g. `["cs.LG", "cs.AI"]`) |
+| `authors` | TEXT | JSON array of author name strings |
+| `abstract` | TEXT | Paper abstract |
+| `pdf_url` | TEXT | Direct PDF download URL |
+| `full_arxiv_url` | TEXT | Canonical arXiv abstract page URL |
+| `full_text` | TEXT | Full extracted PDF text |
+| `keywords` | TEXT | JSON array of keyword strings extracted by the LLM |
+
+### `keywords`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `keyword` | TEXT PK | The term itself (unique) |
+| `definition` | TEXT | LLM-generated definition |
+| `count` | INTEGER | Number of papers this term has appeared in |
+| `paper_references` | TEXT | JSON array of `article_id` strings that reference this keyword |
+
+`rowid` is the implicit SQLite row number used by the API to address individual keywords via `/terms/{id}`.
+
+---
+
+## API Reference
+
+### `GET /terms`
+
+Returns the most popular terms, sorted by `count` descending (max 50).
+
+**When to use:** populating a term list, search bar, or glossary index.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `search` | No | Case-insensitive substring filter applied to both `keyword` and `definition` |
+
+**Response** — array of term objects:
+```json
+[
+  {
+    "id": 12,
+    "term": "transformer",
+    "definition": "Attention-based architecture for sequence modelling."
+  }
+]
+```
+
+---
+
+### `GET /terms/{term_id}`
+
+Returns full detail for a single keyword, including its source papers, related terms, and date range.
+
+**When to use:** a keyword detail/drawer view where you need sources, tags, and related terms alongside the definition.
+
+**Path parameter:** `term_id` — the `rowid` of the keyword row (matches the `id` field returned by `GET /terms`).
+
+**Response:**
+```json
+{
+  "id": 12,
+  "term": "transformer",
+  "definition": "Attention-based architecture for sequence modelling.",
+  "sources": [
+    {
+      "title": "Attention Is All You Need",
+      "summary": "First 200 characters of the abstract...",
+      "date": "2017-06-12",
+      "link": "https://arxiv.org/abs/1706.03762"
+    }
+  ],
+  "related_terms": [
+    { "id": 1, "term": "neural networks" }
+  ],
+  "tags": [
+    { "name": "cs.LG" }
+  ],
+  "dates": ["2013-12-19", "2018-10-11"]
+}
+```
+
+**How the response is built:**
+
+- **`sources`** — the `paper_references` column is parsed into a list of `article_id` integers, then those articles are fetched and each one becomes a source entry.
+- **`tags`** — `tags` is parsed from every source article, deduplicated, and capped at 5 entries.
+- **`dates`** — `date_submitted` is collected from every source article, then sorted lexicographically. The result is `[earliest, latest]`. Returns `[]` if the keyword has no article references.
+- **`related_terms`** — keywords that share at least one source article with the requested term (up to 5). If the keyword has no article references, 5 random other keywords are returned as a fallback.
+
+Returns **HTTP 404** if `term_id` does not match any keyword row.
+
+---
+
 ## Current TODOs
 This project is still in progress. Up next we are working on...
 
-- [X] Working project MVP w/ PostgreSQL
+- [X] Migrate project from PostgreSQL to SQLite
 - [X] Set up container project structure
 - [X] Processor: fix imports, streamline logic, switch to SQLite, add OpenAI support
 - [X] Dashboard: connect to SQLite, display scraping metrics and category distribution
 - [X] Frontend: Nginx container serving web UI, connected to SQLite via FastAPI
 - [X] Automated scripts: logging, PDF cleanup
-- [ ] Fix search bar on river frontend page
-- [ ] Add paper links to keyword page
+- [ ] Rework front end using svelte
+- [ ] Tune sys prompts for definition extraction
 - [ ] Create reports for model timing/cost statistics in Streamlit dashboard
 
 ## License
