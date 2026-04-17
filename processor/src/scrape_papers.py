@@ -10,6 +10,7 @@ import time
 import json
 import urllib.request
 from typing import Tuple, Optional, Dict, Any
+from docling.document_converter import DocumentConverter
 
 # from pathlib import Path
 from pypdf import PdfReader
@@ -47,7 +48,7 @@ def download_pdf(pdf_url: str, save_dir: str, output_filename: Optional[str] = N
     try:
         # download file and store locally; grabs file, not byte object
         urllib.request.urlretrieve(pdf_url, save_path)
-        logger.info("Downloaded PDF successfully", extra={"arxiv_id": output_filename.replace('.pdf', ''), "url": pdf_url})
+        logger.info(f"Downloaded PDF successfully", extra={"arxiv_id": output_filename.replace('.pdf', ''), "url": pdf_url})
         return True, None
 
     except Exception as e:
@@ -152,7 +153,16 @@ def extract_text_docling(pdf_filepath: str) -> Tuple[Optional[str], Optional[str
     Returns:
         Tuple of (text: str | None, error_message: str | None)
     """
-    raise NotImplementedError("Docling text extration not yet supported, use pypdf")
+    try:
+        doc = DocumentConverter().convert(pdf_filepath).document
+        text = doc.export_to_markdown()
+        logger.debug(f"Extracted text using docling: {len(text)} characters", extra={"file": os.path.basename(pdf_filepath)})
+        return text, None
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.error(f"docling extraction failed: {error_msg}", extra={"file": pdf_filepath})
+        return None, error_msg
 
 def extract_text(metadata_dict: Dict[str, Any], pdf_save_dir: str, method: str = 'pypdf',
                  metrics: Optional[PipelineMetrics] = None) -> None:
@@ -176,7 +186,7 @@ def extract_text(metadata_dict: Dict[str, Any], pdf_save_dir: str, method: str =
         pdf_filepath = os.path.join(pdf_save_dir, pdf_filename)
 
         if not os.path.exists(pdf_filepath):
-            logger.warning("PDF not found for text extraction", extra={"arxiv_id": arxiv_id, "file": pdf_filepath})
+            logger.warning(f"PDF not found for text extraction", extra={"arxiv_id": arxiv_id, "file": pdf_filepath})
             continue
 
         if metrics:
@@ -232,7 +242,7 @@ def scrape_papers(query: str, date: str, max_results: int = 2, method: str = 'py
         raise ValueError("Date must be in the form YYYY-MM-DD")
 
     pdf_save_dir = f"./data/pdfs/papers_{date_clean}"
-    logger.info("Starting paper scraping", extra={"query": query, "max_results": max_results, "date": date_clean, "save_dir": pdf_save_dir})
+    logger.info(f"Starting paper scraping", extra={"query": query, "max_results": max_results, "date": date_clean, "save_dir": pdf_save_dir})
     os.makedirs(pdf_save_dir, exist_ok=True)
 
     # Track papers requested
@@ -240,7 +250,7 @@ def scrape_papers(query: str, date: str, max_results: int = 2, method: str = 'py
         metrics.increment("scraping.papers_requested", max_results)
 
     # get metadata from arXiv
-    logger.info("Fetching metadata from arXiv", extra={"query": query, "max_results": max_results})
+    logger.info(f"Fetching metadata from arXiv", extra={"query": query, "max_results": max_results})
     metadata_dict, api_errors = get_arxiv_metadata(query=query, max_results=max_results)
     num_papers_metadata = len(metadata_dict.keys())
 
@@ -264,7 +274,7 @@ def scrape_papers(query: str, date: str, max_results: int = 2, method: str = 'py
         pdf_url = info.get("pdf_url")
 
         if not pdf_url:
-            logger.warning("No PDF URL for paper", extra={"paper_id": paper_id})
+            logger.warning(f"No PDF URL for paper", extra={"paper_id": paper_id})
             continue
 
         arxiv_id = pdf_url.split('/')[-1]
@@ -273,7 +283,7 @@ def scrape_papers(query: str, date: str, max_results: int = 2, method: str = 'py
 
         # Check if PDF already exists
         if os.path.exists(pdf_filepath):
-            logger.debug("PDF already exists, skipping download", extra={"arxiv_id": arxiv_id})
+            logger.debug(f"PDF already exists, skipping download", extra={"arxiv_id": arxiv_id})
             num_pdfs_downloaded += 1
             continue
 

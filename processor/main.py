@@ -30,7 +30,7 @@ def save_metrics_history(metrics: PipelineMetrics) -> None:
         metrics: PipelineMetrics object with run data
     """
     try:
-        today = datetime.today().strftime("%Y-%m-%d")
+        today = datetime.today().strftime("%Y-%M-%d")
         log_dir = Path("data/logs")
         log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -190,9 +190,8 @@ if __name__ == "__main__":
     logger.info("Starting AURA processor (test mode)")
 
     try:
-        # job()
-        # clean_papers()
-        print("Not scraping until 2am")
+        job()
+        clean_papers()
     except KeyboardInterrupt:
         logger.info("Pipeline interrupted by user")
         sys.exit(0)
